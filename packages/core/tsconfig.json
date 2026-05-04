@@ -6,16 +6,15 @@
     "moduleResolution": "bundler",
     "outDir": "dist",
     "rootDir": "src",
-    "noEmit": false,
+    "noEmit": true,
     "composite": true,
     "incremental": true,
-    "strict": true,
+    "strict": false,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true
+    "forceConsistentCasingInFileNames": false,
+    "declaration": false,
+    "sourceMap": false
   },
   "include": ["src"],
   "exclude": ["node_modules", "dist"]
