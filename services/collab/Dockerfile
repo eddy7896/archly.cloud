@@ -29,11 +29,6 @@ RUN if [ "$NODE_ENV" = "production" ]; then \
 # Copy source code
 COPY . .
 
-# Build in development
-RUN if [ "$NODE_ENV" = "development" ]; then \
-      npm run build; \
-    fi
-
 EXPOSE 1234
 
 HEALTHCHECK --interval=10s --timeout=5s --start-period=5s --retries=3 \
