@@ -23,15 +23,8 @@ RUN if [ "$NODE_ENV" = "production" ]; then \
 # Copy source code
 COPY . .
 
-# Build in non-production
-RUN if [ "$NODE_ENV" != "production" ]; then \
-      npm run build; \
-    fi
-
-# Generate Prisma client for production
-RUN if [ "$NODE_ENV" = "production" ]; then \
-      npx prisma generate --schema=./packages/database/prisma/schema.prisma || true; \
-    fi
+# Generate Prisma client (needed for both dev and prod)
+RUN npx prisma generate --schema=./packages/database/prisma/schema.prisma || true
 
 EXPOSE 3002
 
@@ -39,6 +32,8 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:3002 || exit 1
 
 # Start server based on NODE_ENV
+# Dev: builds and hot-reloads on startup
+# Prod: expects pre-built .next from CI/separate build
 CMD if [ "$NODE_ENV" = "production" ]; then \
       npm start --workspace=editor; \
     else \
