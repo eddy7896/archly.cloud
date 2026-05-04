@@ -2,17 +2,22 @@
  * Editor Shell - Wraps Pascal Editor
  * Top bar: project name, presence, share, export
  * Main area: 3D canvas + tools
+ * Integrated with Yjs real-time sync & presence
  */
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Viewer } from '@pascal-app/viewer';
 import { useEditor } from '@pascal-app/editor';
 import { projectsApi } from '@/lib/api-client';
+import { useCollaboration } from '@/context/CollaborationContext';
+import { usePresence } from '@/hooks/usePresence';
 import { EditorTopBar } from './editor/EditorTopBar';
 import { SelectionTool } from './tools/SelectionTool';
 import { TransformTool } from './tools/TransformTool';
+import { PresenceCursor } from './presence/PresenceCursor';
+import { SelectionHighlight } from './presence/SelectionHighlight';
 
 interface EditorProps {
   projectId: string;
@@ -23,13 +28,23 @@ export function Editor({ projectId, accessLevel }: EditorProps) {
   const [projectData, setProjectData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const editor = useEditor(projectId);
+  const { collab, isConnected } = useCollaboration();
+  const { users, updateCursor, updateSelection, setActivity } = usePresence(collab);
 
-  // Load project data
+  // Load project data & sync with Yjs
   useEffect(() => {
     const loadProject = async () => {
       try {
         const data = await projectsApi.get(projectId);
         setProjectData(data);
+
+        // Load initial scene state from Yjs document
+        if (collab && isConnected) {
+          const sceneState = collab.getScene();
+          if (Object.keys(sceneState).length > 0) {
+            editor.updateScene(sceneState);
+          }
+        }
       } catch (error) {
         console.error('Failed to load project:', error);
       } finally {
@@ -38,7 +53,42 @@ export function Editor({ projectId, accessLevel }: EditorProps) {
     };
 
     loadProject();
-  }, [projectId]);
+  }, [projectId, collab, isConnected, editor]);
+
+  // Subscribe to Yjs updates
+  useEffect(() => {
+    if (!collab) return;
+
+    collab.onSceneUpdate((state) => {
+      editor.updateScene(state);
+    });
+  }, [collab, editor]);
+
+  // Update presence when selection changes
+  useEffect(() => {
+    if (editor.selectedNode && accessLevel !== 'viewer') {
+      updateSelection(editor.selectedNode.id);
+    }
+  }, [editor.selectedNode, accessLevel, updateSelection]);
+
+  // Handle mouse move for cursor tracking
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent) => {
+      if (isConnected && accessLevel !== 'viewer') {
+        updateCursor(e.clientX, e.clientY, 0);
+      }
+    },
+    [isConnected, accessLevel, updateCursor]
+  );
+
+  // Update activity status
+  useEffect(() => {
+    setActivity(accessLevel === 'viewer' ? 'viewing' : 'editing');
+
+    return () => {
+      setActivity('idle');
+    };
+  }, [accessLevel, setActivity]);
 
   if (loading || !projectData) {
     return (
@@ -49,12 +99,14 @@ export function Editor({ projectId, accessLevel }: EditorProps) {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-black">
+    <div className="h-screen flex flex-col bg-black" onMouseMove={handleMouseMove}>
       {/* Top Bar */}
       <EditorTopBar
         projectName={projectData.name}
         projectId={projectId}
         accessLevel={accessLevel}
+        isConnected={isConnected}
+        connectedUsers={users}
       />
 
       {/* Main Canvas Area */}
@@ -68,8 +120,9 @@ export function Editor({ projectId, accessLevel }: EditorProps) {
             </>
           )}
 
-          {/* Presence overlays (cursors, activity) */}
-          <PresenceOverlay projectId={projectId} />
+          {/* Presence overlays (cursors, selections, activity) */}
+          <PresenceCursor />
+          <SelectionHighlight />
         </Viewer>
 
         {/* Left Tools Panel (collapsible) */}
