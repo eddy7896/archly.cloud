@@ -1,0 +1,233 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// ORGANIZATIONS & TEAMS
+// ============================================================================
+
+model Organization {
+  id            String   @id @default(cuid())
+  name          String   @unique
+  billingPlan   String   @default("free")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  teams         Team[]
+  users         User[]
+
+  @@index([billingPlan])
+}
+
+model Team {
+  id              String   @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name            String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  projects        Project[]
+  members         TeamMember[]
+
+  @@index([organizationId])
+  @@index([name])
+}
+
+model TeamMember {
+  id        String   @id @default(cuid())
+  teamId    String
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      String   @default("member") // owner, editor, member
+  createdAt DateTime @default(now())
+
+  @@unique([teamId, userId])
+  @@index([teamId])
+  @@index([userId])
+}
+
+// ============================================================================
+// USERS & AUTHENTICATION
+// ============================================================================
+
+model User {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  name        String?
+  avatarUrl   String?
+  role        String   @default("user")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  organization    Organization?
+  teams           TeamMember[]
+  projects        ProjectMember[]
+  comments        SpatialComment[]
+  activity        ActivityLog[]
+
+  @@index([email])
+}
+
+// ============================================================================
+// PROJECTS (3D SCENES)
+// ============================================================================
+
+model Project {
+  id                String   @id @default(cuid())
+  teamId            String
+  team              Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  name              String
+  description       String?
+  yjsDocumentBlob   Bytes?   // Yjs snapshot (binary)
+  previewImageUrl   String?
+  isPublished       Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  members           ProjectMember[]
+  comments          SpatialComment[]
+  marketplace       Marketplace?
+  activity          ActivityLog[]
+  cloneSource       CloneHistory[] @relation("sourceProject")
+  cloneTarget       CloneHistory[] @relation("targetProject")
+
+  @@index([teamId])
+  @@index([isPublished])
+  @@index([createdAt])
+}
+
+model ProjectMember {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      String   @default("viewer") // owner, editor, viewer, commenter
+  createdAt DateTime @default(now())
+
+  @@unique([projectId, userId])
+  @@index([projectId])
+  @@index([userId])
+}
+
+// ============================================================================
+// MARKETPLACE
+// ============================================================================
+
+model Marketplace {
+  id            String   @id @default(cuid())
+  projectId     String   @unique
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  creatorId     String
+  title         String
+  description   String?
+  category      String?  // Parametric, Lighting, Furniture, Architecture
+  tags          String[] @default([])
+  downloadCount Int      @default(0)
+  rating        Decimal  @default(0) @db.Decimal(3, 2)
+  isPublished   Boolean  @default(true)
+  publishedAt   DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([creatorId])
+  @@index([isPublished])
+  @@index([category])
+  @@index([downloadCount])
+  @@index([rating])
+}
+
+model CloneHistory {
+  id              String   @id @default(cuid())
+  sourceProjectId String
+  sourceProject   Project  @relation("sourceProject", fields: [sourceProjectId], references: [id], onDelete: Cascade)
+  targetProjectId String
+  targetProject   Project  @relation("targetProject", fields: [targetProjectId], references: [id], onDelete: Cascade)
+  clonedById      String
+  clonedBy        User     @relation(fields: [clonedById], references: [id])
+  clonedAt        DateTime @default(now())
+
+  @@index([sourceProjectId])
+  @@index([targetProjectId])
+  @@index([clonedById])
+  @@index([clonedAt])
+}
+
+// ============================================================================
+// SPATIAL COMMENTS
+// ============================================================================
+
+model SpatialComment {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  content   String
+  // Position in 3D space (x, y, z)
+  positionX Float    @default(0)
+  positionY Float    @default(0)
+  positionZ Float    @default(0)
+  // Optional: reference to specific node
+  nodeId    String?
+  // Resolution
+  resolved  Boolean  @default(false)
+  resolvedAt DateTime?
+  // Tracking
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([userId])
+  @@index([nodeId])
+  @@index([resolved])
+  @@index([createdAt])
+}
+
+// ============================================================================
+// ACTIVITY LOG (AUDIT TRAIL)
+// ============================================================================
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  // Action type: created, updated, deleted, cloned, published, commented, etc
+  action    String   // created_project, updated_node, deleted_node, published, commented, etc
+  // Additional context
+  metadata  Json?    // { nodeId, oldValue, newValue, ... }
+  // IP & User-Agent for security
+  ipAddress String?
+  userAgent String?
+  // Timestamp
+  timestamp DateTime @default(now())
+
+  @@index([projectId])
+  @@index([userId])
+  @@index([action])
+  @@index([timestamp])
+}
+
+// ============================================================================
+// YJS DOCUMENT PERSISTENCE (Collab Server)
+// ============================================================================
+
+model YjsDocument {
+  docId     String   @id
+  state     Bytes    // Binary Yjs state
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  @@index([updatedAt])
+}
