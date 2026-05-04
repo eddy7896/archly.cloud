@@ -93,7 +93,7 @@ services:
   collab:
     build:
       context: ./services/collab
-      dockerfile: ${NODE_ENV:-production}
+      dockerfile: Dockerfile.${NODE_ENV:-production}
       args:
         NODE_ENV: ${NODE_ENV:-production}
     container_name: archly-collab
@@ -137,7 +137,7 @@ services:
   frontend:
     build:
       context: .
-      dockerfile: ${NODE_ENV:-production}
+      dockerfile: Dockerfile.${NODE_ENV:-production}
       args:
         NODE_ENV: ${NODE_ENV:-production}
       target: ${NODE_ENV:-production}
