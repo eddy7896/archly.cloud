@@ -10,8 +10,8 @@ WORKDIR /app
 ARG NODE_ENV=production
 ENV NODE_ENV=${NODE_ENV}
 
-# Install base tools
-RUN npm install -g turbo && apk add --no-cache curl
+# Install base tools + bun package manager
+RUN apk add --no-cache curl && npm install -g turbo bun
 
 # Copy package files
 COPY package.json package-lock.json* bun.lockb* ./

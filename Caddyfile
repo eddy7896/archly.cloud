@@ -32,11 +32,8 @@
 
   # Static assets and SPA → frontend
   reverse_proxy /* frontend:3002 {
-    # Preserve original request headers
-    header_up Host {host}
+    # Caddy handles X-Forwarded-For/Proto by default
     header_up X-Real-IP {remote_host}
-    header_up X-Forwarded-For {remote_host}
-    header_up X-Forwarded-Proto {scheme}
   }
 
   # Security headers
@@ -48,13 +45,7 @@
   # Logging
   log {
     output stdout
-    format json {
-      request_id "{http.request.id}"
-      method {request.method}
-      path {request.uri.path}
-      status {http.response.status}
-      duration {http.response.duration}
-    }
+    format json
   }
 
   # Rate limiting (optional, tuned for dev)
