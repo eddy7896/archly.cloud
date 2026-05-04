@@ -1,31 +1,46 @@
 # ============================================================================
-# Production Dockerfile for Yjs Collaboration Server
+# Unified Dockerfile for Yjs Collaboration Server
+# Supports both development and production via NODE_ENV
 # ============================================================================
-
-FROM node:20-alpine AS builder
-
-WORKDIR /app
-
-COPY package.json package-lock.json* ./
-RUN npm install
-
-COPY . .
-RUN npm run build
 
 FROM node:20-alpine
 
 WORKDIR /app
 
-ENV NODE_ENV=production
+ENV NODE_ENV=${NODE_ENV:-production}
 
+# Install base tools
+RUN apk add --no-cache curl
+RUN if [ "$NODE_ENV" = "development" ]; then \
+      npm install -g nodemon; \
+    fi
+
+# Copy package files
 COPY package.json package-lock.json* ./
-RUN npm install --only=production
 
-COPY --from=builder /app/dist ./dist
+# Install dependencies (production-only or all based on NODE_ENV)
+RUN if [ "$NODE_ENV" = "production" ]; then \
+      npm install --only=production; \
+    else \
+      npm install; \
+    fi
+
+# Copy source code
+COPY . .
+
+# Build in development
+RUN if [ "$NODE_ENV" = "development" ]; then \
+      npm run build; \
+    fi
 
 EXPOSE 1234
 
 HEALTHCHECK --interval=10s --timeout=5s --start-period=5s --retries=3 \
-  CMD wget --quiet --tries=1 --spider http://localhost:1234/health || exit 1
+  CMD curl -f http://localhost:1234/health || exit 1
 
-CMD ["node", "dist/index.js"]
+# Start server based on NODE_ENV
+CMD if [ "$NODE_ENV" = "production" ]; then \
+      node dist/index.js; \
+    else \
+      npm run dev; \
+    fi
