@@ -1,31 +1,38 @@
 /**
- * GET /api/projects/[id]/comments - Get all comments
+ * GET  /api/projects/[id]/comments - List comments
  * POST /api/projects/[id]/comments - Create comment
+ *
+ * Isolation:
+ *   GET  — viewer+ role
+ *   POST — commenter+ role (viewers cannot comment)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
+import { getProjectComments, createSpatialComment, logActivity } from '@/lib/db-queries';
 import {
-  getProjectComments,
-  createSpatialComment,
-  getUserProjectRole,
-} from '@/lib/db-queries';
+  requireProjectAccess,
+  accessErrorResponse,
+  PROJECT_ROLES,
+} from '@/lib/access-control';
 
 export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const projectId = params.id;
+    const session = await auth.api.getSession({ headers: req.headers });
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const comments = await getProjectComments(projectId);
+    await requireProjectAccess(session.user.id, params.id, PROJECT_ROLES.VIEWER);
+
+    const comments = await getProjectComments(params.id);
     return NextResponse.json(comments);
-  } catch (error) {
-    console.error('GET /api/projects/[id]/comments error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+  } catch (err) {
+    const access = accessErrorResponse(err);
+    if (access) return NextResponse.json({ error: access.error }, { status: access.status });
+    console.error('GET /api/projects/[id]/comments error:', err);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -34,49 +41,35 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await auth.api.getSession({
-      headers: req.headers,
-    });
+    const session = await auth.api.getSession({ headers: req.headers });
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const projectId = params.id;
-    const userId = session.user?.id;
-
-    // Check user has access to project (at least viewer)
-    const role = await getUserProjectRole(userId, projectId);
-    if (!role) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    await requireProjectAccess(session.user.id, params.id, PROJECT_ROLES.COMMENTER);
 
     const body = await req.json();
     const { content, positionX, positionY, positionZ, nodeId } = body;
 
     if (!content) {
-      return NextResponse.json(
-        { error: 'Content required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'content required' }, { status: 400 });
     }
 
     const comment = await createSpatialComment(
-      projectId,
-      userId,
+      params.id,
+      session.user.id,
       content,
-      positionX || 0,
-      positionY || 0,
-      positionZ || 0,
+      positionX ?? 0,
+      positionY ?? 0,
+      positionZ ?? 0,
       nodeId
     );
 
+    await logActivity('commented', session.user.id, params.id, { commentId: comment.id });
+
     return NextResponse.json(comment, { status: 201 });
-  } catch (error) {
-    console.error('POST /api/projects/[id]/comments error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+  } catch (err) {
+    const access = accessErrorResponse(err);
+    if (access) return NextResponse.json({ error: access.error }, { status: access.status });
+    console.error('POST /api/projects/[id]/comments error:', err);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -1,47 +1,43 @@
 /**
- * GET /api/projects/[id] - Get project details
- * PATCH /api/projects/[id] - Update project
+ * GET    /api/projects/[id] - Get project details
+ * PATCH  /api/projects/[id] - Update project metadata
  * DELETE /api/projects/[id] - Delete project
+ *
+ * Isolation:
+ *   GET    — viewer+ role required
+ *   PATCH  — editor+ role required
+ *   DELETE — owner role required
  */
 
 import { auth } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { updateProject, deleteProject, logActivity } from '@/lib/db-queries';
+import {
+  requireProjectAccess,
+  accessErrorResponse,
+  PROJECT_ROLES,
+} from '@/lib/access-control';
 
 export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await auth.api.getSession({
-      headers: req.headers,
-    });
+    const session = await auth.api.getSession({ headers: req.headers });
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const projectId = params.id;
-
-    // TODO: Fetch project from database
-    // TODO: Check user has access (team member)
-
-    const project = {
-      id: projectId,
-      name: 'Project Name',
-      teamId: 'team_123',
-      previewImageUrl: null,
-      isPublished: false,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+    const { project } = await requireProjectAccess(
+      session.user.id,
+      params.id,
+      PROJECT_ROLES.VIEWER
+    );
 
     return NextResponse.json(project);
-  } catch (error) {
-    console.error('GET /api/projects/[id] error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+  } catch (err) {
+    const access = accessErrorResponse(err);
+    if (access) return NextResponse.json({ error: access.error }, { status: access.status });
+    console.error('GET /api/projects/[id] error:', err);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -50,35 +46,24 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await auth.api.getSession({
-      headers: req.headers,
-    });
+    const session = await auth.api.getSession({ headers: req.headers });
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    await requireProjectAccess(session.user.id, params.id, PROJECT_ROLES.EDITOR);
 
-    const projectId = params.id;
     const body = await req.json();
-    const { name, description } = body;
+    const { name, description, previewImageUrl } = body;
 
-    // TODO: Update project in database
-    // TODO: Check user is OWNER or EDITOR
+    const updated = await updateProject(params.id, { name, description, previewImageUrl });
 
-    const project = {
-      id: projectId,
-      name: name || 'Project Name',
-      description,
-      updatedAt: new Date(),
-    };
+    await logActivity('updated_project', session.user.id, params.id, { name });
 
-    return NextResponse.json(project);
-  } catch (error) {
-    console.error('PATCH /api/projects/[id] error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json(updated);
+  } catch (err) {
+    const access = accessErrorResponse(err);
+    if (access) return NextResponse.json({ error: access.error }, { status: access.status });
+    console.error('PATCH /api/projects/[id] error:', err);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -87,25 +72,18 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await auth.api.getSession({
-      headers: req.headers,
-    });
+    const session = await auth.api.getSession({ headers: req.headers });
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    await requireProjectAccess(session.user.id, params.id, PROJECT_ROLES.OWNER);
 
-    const projectId = params.id;
-
-    // TODO: Delete project from database (soft delete recommended)
-    // TODO: Check user is OWNER
+    await deleteProject(params.id);
 
     return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error('DELETE /api/projects/[id] error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+  } catch (err) {
+    const access = accessErrorResponse(err);
+    if (access) return NextResponse.json({ error: access.error }, { status: access.status });
+    console.error('DELETE /api/projects/[id] error:', err);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -1,49 +1,36 @@
 /**
- * POST /api/projects/[id]/publish — Publish project to marketplace
- * DELETE /api/projects/[id]/publish — Unpublish from marketplace
+ * POST   /api/projects/[id]/publish - Publish to marketplace
+ * DELETE /api/projects/[id]/publish - Unpublish
+ *
+ * Isolation: owner or editor role required.
  */
 
 import { auth } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { publishToMarketplace, unpublishFromMarketplace } from '@/lib/db-queries';
 import {
-  publishToMarketplace,
-  unpublishFromMarketplace,
-  getUserProjectRole,
-} from '@/lib/db-queries';
+  requireProjectAccess,
+  accessErrorResponse,
+  PROJECT_ROLES,
+} from '@/lib/access-control';
 
 export async function POST(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await auth.api.getSession({
-      headers: req.headers,
-    });
+    const session = await auth.api.getSession({ headers: req.headers });
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const projectId = params.id;
-    const role = await getUserProjectRole(session.user.id, projectId);
-
-    if (!role || !['owner', 'editor'].includes(role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    await requireProjectAccess(session.user.id, params.id, PROJECT_ROLES.EDITOR);
 
     const body = await req.json();
     const { title, description, category, tags } = body;
-
-    if (!title) {
-      return NextResponse.json(
-        { error: 'title required' },
-        { status: 400 }
-      );
-    }
+    if (!title) return NextResponse.json({ error: 'title required' }, { status: 400 });
 
     const creatorName = session.user.name || 'Anonymous';
     const [, listing] = await publishToMarketplace(
-      projectId,
+      params.id,
       session.user.id,
       creatorName,
       title,
@@ -53,12 +40,11 @@ export async function POST(
     );
 
     return NextResponse.json(listing, { status: 201 });
-  } catch (error) {
-    console.error('POST /api/projects/[id]/publish error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+  } catch (err) {
+    const access = accessErrorResponse(err);
+    if (access) return NextResponse.json({ error: access.error }, { status: access.status });
+    console.error('POST /api/projects/[id]/publish error:', err);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -67,28 +53,17 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await auth.api.getSession({
-      headers: req.headers,
-    });
+    const session = await auth.api.getSession({ headers: req.headers });
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    await requireProjectAccess(session.user.id, params.id, PROJECT_ROLES.EDITOR);
 
-    const projectId = params.id;
-    const role = await getUserProjectRole(session.user.id, projectId);
-
-    if (!role || !['owner', 'editor'].includes(role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-
-    await unpublishFromMarketplace(projectId);
+    await unpublishFromMarketplace(params.id);
     return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error('DELETE /api/projects/[id]/publish error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+  } catch (err) {
+    const access = accessErrorResponse(err);
+    if (access) return NextResponse.json({ error: access.error }, { status: access.status });
+    console.error('DELETE /api/projects/[id]/publish error:', err);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
