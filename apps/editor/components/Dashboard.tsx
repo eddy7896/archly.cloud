@@ -10,6 +10,7 @@ import { useState, useEffect } from 'react';
 import { projectsApi, teamsApi } from '@/lib/api-client';
 import { ProjectCard } from './ProjectCard';
 import { CreateProjectModal } from './modals/CreateProjectModal';
+import { PublishModal } from './modals/PublishModal';
 
 interface Team {
   id: string;
@@ -33,6 +34,8 @@ export function Dashboard({ organizationId }: { organizationId: string }) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [publishModalOpen, setPublishModalOpen] = useState(false);
+  const [publishingProjectId, setPublishingProjectId] = useState<string | null>(null);
 
   // Fetch teams
   useEffect(() => {
@@ -91,6 +94,34 @@ export function Dashboard({ organizationId }: { organizationId: string }) {
       setProjects(projects.filter((p) => p.id !== projectId));
     } catch (error) {
       console.error('Failed to delete project:', error);
+    }
+  };
+
+  const handleUnpublishProject = async (projectId: string) => {
+    try {
+      await projectsApi.unpublish(projectId);
+      setProjects(
+        projects.map((p) =>
+          p.id === projectId ? { ...p, isPublished: false } : p
+        )
+      );
+    } catch (error) {
+      console.error('Failed to unpublish project:', error);
+    }
+  };
+
+  const handleOpenPublishModal = (projectId: string) => {
+    setPublishingProjectId(projectId);
+    setPublishModalOpen(true);
+  };
+
+  const handlePublished = () => {
+    if (publishingProjectId) {
+      setProjects(
+        projects.map((p) =>
+          p.id === publishingProjectId ? { ...p, isPublished: true } : p
+        )
+      );
     }
   };
 
@@ -154,6 +185,8 @@ export function Dashboard({ organizationId }: { organizationId: string }) {
                   key={project.id}
                   project={project}
                   onDelete={() => handleDeleteProject(project.id)}
+                  onPublish={() => handleOpenPublishModal(project.id)}
+                  onUnpublish={() => handleUnpublishProject(project.id)}
                 />
               ))}
             </div>
@@ -183,6 +216,22 @@ export function Dashboard({ organizationId }: { organizationId: string }) {
         onClose={() => setCreateModalOpen(false)}
         onCreate={handleCreateProject}
       />
+
+      {/* Publish Modal */}
+      {publishModalOpen && publishingProjectId && (
+        <PublishModal
+          projectId={publishingProjectId}
+          projectName={
+            projects.find((p) => p.id === publishingProjectId)?.name ||
+            'Project'
+          }
+          onClose={() => {
+            setPublishModalOpen(false);
+            setPublishingProjectId(null);
+          }}
+          onPublished={handlePublished}
+        />
+      )}
     </div>
   );
 }

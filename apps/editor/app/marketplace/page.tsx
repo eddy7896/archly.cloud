@@ -5,6 +5,7 @@
 
 import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
+import prisma from '@/lib/db';
 import { Marketplace } from '@/components/Marketplace';
 
 export default async function MarketplacePage() {
@@ -14,12 +15,17 @@ export default async function MarketplacePage() {
     redirect('/auth/login');
   }
 
-  // TODO: Fetch user's default team
-  const userTeamId = 'team_placeholder';
+  // Fetch user's first team membership
+  const teamMember = await prisma.teamMember.findFirst({
+    where: { userId: session.user.id },
+    select: { teamId: true },
+  });
+
+  const userTeamId = teamMember?.teamId ?? '';
 
   return (
     <main>
-      <Marketplace userTeamId={userTeamId} />
+      <Marketplace userTeamId={userTeamId} userId={session.user.id} />
     </main>
   );
 }

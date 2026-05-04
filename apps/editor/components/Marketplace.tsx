@@ -23,13 +23,23 @@ interface MarketplaceProject {
   rating: number;
 }
 
-export function Marketplace({ userTeamId }: { userTeamId: string }) {
+export function Marketplace({
+  userTeamId,
+  userId,
+}: {
+  userTeamId: string;
+  userId: string;
+}) {
   const [projects, setProjects] = useState<MarketplaceProject[]>([]);
   const [featured, setFeatured] = useState<MarketplaceProject[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [loading, setLoading] = useState(true);
   const [cloning, setCloning] = useState<string | null>(null);
+  const [notification, setNotification] = useState<{
+    type: 'success' | 'error';
+    msg: string;
+  } | null>(null);
 
   // Fetch featured projects
   useEffect(() => {
@@ -70,12 +80,23 @@ export function Marketplace({ userTeamId }: { userTeamId: string }) {
   const handleClone = async (sourceProjectId: string, title: string) => {
     setCloning(sourceProjectId);
     try {
-      const cloned = await projectsApi.clone(sourceProjectId, userTeamId);
-      alert(`Cloned "${title}" to your drafts!`);
-      // Optionally redirect to the new project
+      const cloned = await projectsApi.clone(
+        sourceProjectId,
+        userTeamId,
+        `Copy of ${title}`
+      );
+      setNotification({
+        type: 'success',
+        msg: `Cloned "${title}" to your drafts!`,
+      });
+      setTimeout(() => setNotification(null), 4000);
     } catch (error) {
       console.error('Failed to clone project:', error);
-      alert('Failed to clone project');
+      setNotification({
+        type: 'error',
+        msg: 'Failed to clone project',
+      });
+      setTimeout(() => setNotification(null), 4000);
     } finally {
       setCloning(null);
     }
@@ -85,6 +106,19 @@ export function Marketplace({ userTeamId }: { userTeamId: string }) {
 
   return (
     <div className="min-h-screen bg-[#0A0A0A]">
+      {/* Notification Toast */}
+      {notification && (
+        <div
+          className={`fixed top-4 right-4 px-4 py-3 rounded border z-50 ${
+            notification.type === 'success'
+              ? 'bg-green-500/10 border-green-500/30 text-green-400'
+              : 'bg-red-500/10 border-red-500/30 text-red-400'
+          }`}
+        >
+          {notification.msg}
+        </div>
+      )}
+
       {/* Header */}
       <div className="border-b border-white/10 bg-black/50 backdrop-blur-xl sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-8 py-6">
@@ -216,9 +250,14 @@ function MarketplaceCard({
 
         {/* Creator & Stats */}
         <div className="flex items-center justify-between text-xs text-white/40 mb-3">
-          <span>By {project.creatorName}</span>
+          <Link
+            href={`/marketplace/creators/${project.creatorId}`}
+            className="hover:text-white/60 transition-colors"
+          >
+            By {project.creatorName}
+          </Link>
           <div className="flex gap-2">
-            <span>⭐ {project.rating.toFixed(1)}</span>
+            <span>⭐ {(project.rating ?? 0).toFixed(1)}</span>
             <span>📥 {project.downloadCount}</span>
           </div>
         </div>

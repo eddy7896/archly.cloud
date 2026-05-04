@@ -19,9 +19,16 @@ interface ProjectCardProps {
     isPublished: boolean;
   };
   onDelete?: () => void;
+  onPublish?: () => void;
+  onUnpublish?: () => void;
 }
 
-export function ProjectCard({ project, onDelete }: ProjectCardProps) {
+export function ProjectCard({
+  project,
+  onDelete,
+  onPublish,
+  onUnpublish,
+}: ProjectCardProps) {
   const [showPreview, setShowPreview] = useState(false);
 
   const lastEdited = new Date(project.updatedAt).toLocaleDateString('en-US', {
@@ -108,9 +115,27 @@ export function ProjectCard({ project, onDelete }: ProjectCardProps) {
 
       {/* Actions */}
       <div className="p-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button className="flex-1 px-2 py-1 text-xs bg-white/10 hover:bg-white/20 text-white rounded transition-colors">
-          Share
-        </button>
+        {project.isPublished ? (
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              onUnpublish?.();
+            }}
+            className="flex-1 px-2 py-1 text-xs bg-green-500/20 hover:bg-green-500/30 text-green-200 rounded transition-colors font-medium"
+          >
+            Published ✓
+          </button>
+        ) : (
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              onPublish?.();
+            }}
+            className="flex-1 px-2 py-1 text-xs bg-white/10 hover:bg-white/20 text-white rounded transition-colors"
+          >
+            Publish
+          </button>
+        )}
         <button className="flex-1 px-2 py-1 text-xs bg-white/10 hover:bg-white/20 text-white rounded transition-colors">
           Export
         </button>
