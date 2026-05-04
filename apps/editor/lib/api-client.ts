@@ -87,13 +87,16 @@ export const projectsApi = {
       method: 'DELETE',
     }),
 
-  clone: (sourceId: string, teamId: string) =>
+  clone: (sourceId: string, teamId: string, name?: string) =>
     apiCall('/projects/clone', {
       method: 'POST',
-      body: JSON.stringify({ sourceId, teamId }),
+      body: JSON.stringify({ sourceId, teamId, name }),
     }),
 
-  publish: (id: string, data: { title: string; description?: string }) =>
+  publish: (
+    id: string,
+    data: { title: string; description?: string; category?: string; tags?: string[] }
+  ) =>
     apiCall(`/projects/${id}/publish`, {
       method: 'POST',
       body: JSON.stringify(data),
@@ -206,7 +209,7 @@ export const marketplaceApi = {
       method: 'GET',
     }),
 
-  getCreator: (userId: string) =>
+  getCreatorListings: (userId: string) =>
     apiCall(`/marketplace/creators/${userId}`, {
       method: 'GET',
     }),

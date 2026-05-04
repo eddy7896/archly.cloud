@@ -1,10 +1,13 @@
 /**
- * POST /api/projects/clone - Clone a project
- * Pointer-based duplication (shares R2 URLs, not file copies)
+ * POST /api/projects/clone - Clone a project (pointer-based duplication)
+ * Copies yjsBlob (scene state), shares previewImageUrl (R2 reference)
+ * Increments downloadCount if cloning from a marketplace listing
  */
 
 import { auth } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { cloneProject, incrementDownloadCount } from '@/lib/db-queries';
+import prisma from '@/lib/db';
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,7 +20,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { sourceId, teamId } = body;
+    const { sourceId, teamId, name } = body;
 
     if (!sourceId || !teamId) {
       return NextResponse.json(
@@ -26,24 +29,28 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // TODO: Fetch source project
-    // TODO: Copy yjsDocumentBlob (document state)
-    // TODO: Create new project with cloned state
-    // TODO: Record clone in cloneHistory table
-    // TODO: Assets (R2 URLs) are shared, not duplicated
+    const userId = session.user.id;
 
-    const clonedProject = {
-      id: 'proj_' + Date.now(),
-      teamId,
-      name: 'Copy of Source Project',
-      yjsDocumentBlob: null, // TODO: copy from source
-      previewImageUrl: null,
-      isPublished: false,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+    // Fetch source project with marketplace listing status
+    const source = await prisma.project.findUnique({
+      where: { id: sourceId },
+      include: { marketplace: true },
+    });
 
-    return NextResponse.json(clonedProject, { status: 201 });
+    if (!source) {
+      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+    }
+
+    // Clone the project (yjsBlob deep-copied, previewImageUrl shared)
+    const cloneName = name || `Copy of ${source.name}`;
+    const cloned = await cloneProject(sourceId, teamId, userId, cloneName);
+
+    // Increment download count if source is in marketplace
+    if (source.marketplace) {
+      await incrementDownloadCount(source.id);
+    }
+
+    return NextResponse.json(cloned, { status: 201 });
   } catch (error) {
     console.error('POST /api/projects/clone error:', error);
     return NextResponse.json(

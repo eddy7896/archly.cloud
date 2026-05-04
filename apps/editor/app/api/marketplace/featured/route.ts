@@ -3,14 +3,15 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { getFeaturedProjects } from '@/lib/db-queries';
 
 export async function GET(req: NextRequest) {
   try {
-    // TODO: Query marketplace table
-    // Sort by downloadCount or rating
-    // Limit to 10-20 results
+    const { searchParams } = new URL(req.url);
+    const limitParam = searchParams.get('limit');
+    const limit = limitParam ? parseInt(limitParam, 10) : 10;
 
-    const featured = [];
+    const featured = await getFeaturedProjects(limit);
 
     return NextResponse.json(featured);
   } catch (error) {

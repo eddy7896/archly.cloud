@@ -22,7 +22,6 @@ model Organization {
   updatedAt     DateTime @updatedAt
 
   teams         Team[]
-  users         User[]
 
   @@index([billingPlan])
 }
@@ -69,11 +68,12 @@ model User {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  organization    Organization?
-  teams           TeamMember[]
-  projects        ProjectMember[]
-  comments        SpatialComment[]
-  activity        ActivityLog[]
+  teams               TeamMember[]
+  projects            ProjectMember[]
+  comments            SpatialComment[]
+  activity            ActivityLog[]
+  marketplaceListings Marketplace[]
+  cloneHistory        CloneHistory[]
 
   @@index([email])
 }
@@ -129,6 +129,8 @@ model Marketplace {
   projectId     String   @unique
   project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   creatorId     String
+  creator       User     @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  creatorName   String?  // Denormalized snapshot at publish time
   title         String
   description   String?
   category      String?  // Parametric, Lighting, Furniture, Architecture

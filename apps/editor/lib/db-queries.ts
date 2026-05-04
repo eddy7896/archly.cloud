@@ -260,33 +260,57 @@ export async function getActivitySince(
 
 export async function publishToMarketplace(
   projectId: string,
+  userId: string,
+  creatorName: string,
   title: string,
   description?: string,
   category?: string,
   tags: string[] = []
 ) {
-  return prisma.marketplace.create({
-    data: {
-      projectId,
-      title,
-      description,
-      category,
-      tags,
-      creatorId: 'unknown', // TODO: Get from session
-      isPublished: true,
-    },
-  });
+  return prisma.$transaction([
+    prisma.project.update({
+      where: { id: projectId },
+      data: { isPublished: true },
+    }),
+    prisma.marketplace.upsert({
+      where: { projectId },
+      create: {
+        projectId,
+        creatorId: userId,
+        creatorName,
+        title,
+        description,
+        category,
+        tags,
+        isPublished: true,
+      },
+      update: {
+        title,
+        description,
+        category,
+        tags,
+        isPublished: true,
+        updatedAt: new Date(),
+      },
+    }),
+  ]);
 }
 
 export async function unpublishFromMarketplace(projectId: string) {
-  return prisma.marketplace.update({
-    where: { projectId },
-    data: { isPublished: false },
-  });
+  return prisma.$transaction([
+    prisma.project.update({
+      where: { id: projectId },
+      data: { isPublished: false },
+    }),
+    prisma.marketplace.update({
+      where: { projectId },
+      data: { isPublished: false },
+    }),
+  ]);
 }
 
 export async function searchMarketplace(query: string, category?: string) {
-  return prisma.marketplace.findMany({
+  const results = await prisma.marketplace.findMany({
     where: {
       isPublished: true,
       AND: [
@@ -306,16 +330,48 @@ export async function searchMarketplace(query: string, category?: string) {
     orderBy: [{ downloadCount: 'desc' }, { rating: 'desc' }],
     take: 20,
   });
+  return results.map((r) => ({ ...r, rating: Number(r.rating) }));
 }
 
 export async function getFeaturedProjects(limit: number = 10) {
-  return prisma.marketplace.findMany({
+  const results = await prisma.marketplace.findMany({
     where: { isPublished: true },
     include: {
       project: { select: { id: true, name: true, previewImageUrl: true } },
     },
     orderBy: [{ downloadCount: 'desc' }, { rating: 'desc' }],
     take: limit,
+  });
+  return results.map((r) => ({ ...r, rating: Number(r.rating) }));
+}
+
+export async function getMarketplaceListing(listingId: string) {
+  const listing = await prisma.marketplace.findUnique({
+    where: { id: listingId },
+    include: {
+      project: { select: { id: true, name: true, previewImageUrl: true } },
+      creator: { select: { id: true, name: true, avatarUrl: true } },
+    },
+  });
+  if (!listing) return null;
+  return { ...listing, rating: Number(listing.rating) };
+}
+
+export async function getCreatorListings(userId: string) {
+  const listings = await prisma.marketplace.findMany({
+    where: { creatorId: userId, isPublished: true },
+    include: {
+      project: { select: { id: true, name: true, previewImageUrl: true } },
+    },
+    orderBy: { publishedAt: 'desc' },
+  });
+  return listings.map((l) => ({ ...l, rating: Number(l.rating) }));
+}
+
+export async function incrementDownloadCount(projectId: string) {
+  return prisma.marketplace.update({
+    where: { projectId },
+    data: { downloadCount: { increment: 1 } },
   });
 }
 
