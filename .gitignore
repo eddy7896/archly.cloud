@@ -48,3 +48,18 @@ og-test
 
 # Worktrees
 .worktrees
+
+# Docker volumes & data
+postgres_data/
+postgres_data_dev/
+*.sql.bak
+
+# IDE
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
