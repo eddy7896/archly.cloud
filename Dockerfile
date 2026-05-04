@@ -18,7 +18,7 @@ COPY package.json package-lock.json* bun.lockb* ./
 
 # Install dependencies (production-only or all based on NODE_ENV)
 RUN if [ "$NODE_ENV" = "production" ]; then \
-      npm ci --only=production; \
+      npm install --only=production; \
     else \
       npm install; \
     fi
