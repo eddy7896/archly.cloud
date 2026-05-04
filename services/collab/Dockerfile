@@ -7,7 +7,8 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-ENV NODE_ENV=${NODE_ENV:-production}
+ARG NODE_ENV=production
+ENV NODE_ENV=${NODE_ENV}
 
 # Install base tools
 RUN apk add --no-cache curl

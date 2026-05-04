@@ -19,13 +19,13 @@
   reverse_proxy /api/* frontend:3002
 
   # WebSocket for collaboration → collab server
-  reverse_proxy /ws ws://collab:1234 {
+  reverse_proxy /ws http://collab:1234 {
     header_up Connection "upgrade"
     header_up Upgrade "websocket"
   }
 
   # Alternative WebSocket endpoint (if needed)
-  reverse_proxy /collaborate ws://collab:1234 {
+  reverse_proxy /collaborate http://collab:1234 {
     header_up Connection "upgrade"
     header_up Upgrade "websocket"
   }
@@ -76,7 +76,7 @@
 #   }
 #
 #   # WebSocket
-#   reverse_proxy /ws ws://collab:1234 {
+#   reverse_proxy /ws http://collab:1234 {
 #     header_up Connection "upgrade"
 #     header_up Upgrade "websocket"
 #     header_up X-Real-IP {remote_host}
