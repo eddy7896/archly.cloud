@@ -18,6 +18,42 @@ version: '3.9'
 
 services:
   # ============================================================================
+  # Caddy Reverse Proxy (Port 80/443)
+  # ============================================================================
+  # Routes all HTTP/HTTPS traffic to internal services.
+  # Handles WebSocket upgrades for collaboration server.
+  # ============================================================================
+  caddy:
+    image: caddy:2-alpine
+    container_name: archly-caddy
+    environment:
+      DOMAIN: ${CADDY_DOMAIN:-archly.local}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+      - collab
+    networks:
+      - archly-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ============================================================================
   # PostgreSQL Database (Primary data store)
   # ============================================================================
   postgres:
@@ -185,4 +221,8 @@ networks:
 # ============================================================================
 volumes:
   postgres_data:
+    driver: local
+  caddy_data:
+    driver: local
+  caddy_config:
     driver: local

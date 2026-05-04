@@ -1,0 +1,112 @@
+# ============================================================================
+# CADDY REVERSE PROXY CONFIGURATION — archly.cloud
+# ============================================================================
+# Routes all traffic to internal services:
+#  - frontend (Next.js) → :3002
+#  - collab (Yjs WebSocket) → :1234
+#
+# Usage:
+#   - Development: http://archly.local (configure hosts file or use DNS)
+#   - Production: https://archly.cloud (auto HTTPS via Let's Encrypt)
+#
+# ============================================================================
+
+# ────────────────────────────────────────────────────────────────────────────
+# STAGING / DEVELOPMENT
+# ────────────────────────────────────────────────────────────────────────────
+{$DOMAIN}:80 {
+  # API endpoints → frontend
+  reverse_proxy /api/* frontend:3002
+
+  # WebSocket for collaboration → collab server
+  reverse_proxy /ws ws://collab:1234 {
+    header_up Connection "upgrade"
+    header_up Upgrade "websocket"
+  }
+
+  # Alternative WebSocket endpoint (if needed)
+  reverse_proxy /collaborate ws://collab:1234 {
+    header_up Connection "upgrade"
+    header_up Upgrade "websocket"
+  }
+
+  # Static assets and SPA → frontend
+  reverse_proxy /* frontend:3002 {
+    # Preserve original request headers
+    header_up Host {host}
+    header_up X-Real-IP {remote_host}
+    header_up X-Forwarded-For {remote_host}
+    header_up X-Forwarded-Proto {scheme}
+  }
+
+  # Security headers
+  header X-Content-Type-Options nosniff
+  header X-Frame-Options SAMEORIGIN
+  header X-XSS-Protection "1; mode=block"
+  header Referrer-Policy strict-origin-when-cross-origin
+
+  # Logging
+  log {
+    output stdout
+    format json {
+      request_id "{http.request.id}"
+      method {request.method}
+      path {request.uri.path}
+      status {http.response.status}
+      duration {http.response.duration}
+    }
+  }
+
+  # Rate limiting (optional, tuned for dev)
+  # rate_limit / 100r/s
+}
+
+# ────────────────────────────────────────────────────────────────────────────
+# PRODUCTION (uncomment and customize)
+# ────────────────────────────────────────────────────────────────────────────
+# archly.cloud {
+#   # Auto HTTPS via Let's Encrypt
+#   encode gzip
+#
+#   # API endpoints
+#   reverse_proxy /api/* frontend:3002 {
+#     header_up X-Real-IP {remote_host}
+#     header_up X-Forwarded-For {remote_host}
+#     header_up X-Forwarded-Proto https
+#   }
+#
+#   # WebSocket
+#   reverse_proxy /ws ws://collab:1234 {
+#     header_up Connection "upgrade"
+#     header_up Upgrade "websocket"
+#     header_up X-Real-IP {remote_host}
+#   }
+#
+#   # Main app
+#   reverse_proxy /* frontend:3002 {
+#     header_up Host {host}
+#     header_up X-Real-IP {remote_host}
+#     header_up X-Forwarded-For {remote_host}
+#     header_up X-Forwarded-Proto https
+#   }
+#
+#   # Security headers
+#   header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+#   header X-Content-Type-Options nosniff
+#   header X-Frame-Options SAMEORIGIN
+#   header X-XSS-Protection "1; mode=block"
+#   header Referrer-Policy strict-origin-when-cross-origin
+#   header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self' wss:; frame-ancestors 'self';"
+#
+#   # Compression
+#   encode gzip
+#
+#   # Logging
+#   log {
+#     output stdout
+#     format json
+#   }
+#
+#   # Rate limiting (production tuned)
+#   rate_limit / 1000r/s
+# }
